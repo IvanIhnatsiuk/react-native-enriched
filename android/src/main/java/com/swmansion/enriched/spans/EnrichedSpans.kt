@@ -25,6 +25,7 @@ object EnrichedSpans {
   const val H3 = "h3"
   const val BLOCK_QUOTE = "block_quote"
   const val CODE_BLOCK = "code_block"
+  const val CHECK_ITEM = "check_item"
 
   // list styles
   const val UNORDERED_LIST = "unordered_list"
@@ -49,6 +50,7 @@ object EnrichedSpans {
     H3 to ParagraphSpanConfig(EnrichedH3Span::class.java, false),
     BLOCK_QUOTE to ParagraphSpanConfig(EnrichedBlockQuoteSpan::class.java, true),
     CODE_BLOCK to ParagraphSpanConfig(EnrichedCodeBlockSpan::class.java, true),
+    CHECK_ITEM to ParagraphSpanConfig(EnrichedCheckItemSpan::class.java, false),
   )
 
   val listSpans: Map<String, ListSpanConfig> = mapOf(
@@ -93,6 +95,9 @@ object EnrichedSpans {
     ),
     CODE_BLOCK to StylesMergingConfig(
       conflictingStyles = arrayOf(H1, H2, H3, BOLD, ITALIC, UNDERLINE, STRIKETHROUGH, UNORDERED_LIST, ORDERED_LIST, BLOCK_QUOTE, INLINE_CODE),
+    ),
+    CHECK_ITEM to StylesMergingConfig(
+      conflictingStyles = arrayOf(H1, H2, H3, STRIKETHROUGH, UNORDERED_LIST, ORDERED_LIST)
     ),
     UNORDERED_LIST to StylesMergingConfig(
       conflictingStyles = arrayOf(H1, H2, H3, ORDERED_LIST, CODE_BLOCK, BLOCK_QUOTE),

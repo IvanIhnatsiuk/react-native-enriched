@@ -115,6 +115,10 @@ export interface HtmlStyle {
     marginLeft?: number;
     gapWidth?: number;
   };
+  checkItem?: {
+    checkedImage: string;
+    uncheckedImage: string;
+  };
 }
 
 export interface EnrichedTextInputProps extends Omit<ViewProps, 'children'> {

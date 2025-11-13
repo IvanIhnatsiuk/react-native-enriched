@@ -5,7 +5,12 @@ import type {
   Int32,
   UnsafeMixed,
 } from 'react-native/Libraries/Types/CodegenTypes';
-import type { ColorValue, HostComponent, ViewProps } from 'react-native';
+import type {
+  ColorValue,
+  HostComponent,
+  ViewProps,
+  ImageSource,
+} from 'react-native';
 import React from 'react';
 
 export interface OnChangeTextEvent {
@@ -120,6 +125,10 @@ export interface HtmlStyleInternal {
     bulletSize?: Float;
     marginLeft?: Float;
     gapWidth?: Float;
+  };
+  checkItem?: {
+    checkedImage?: ImageSource;
+    uncheckedImage?: ImageSource;
   };
 }
 

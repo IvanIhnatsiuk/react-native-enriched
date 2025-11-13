@@ -273,6 +273,9 @@ export default function App() {
             selectionColor="deepskyblue"
             cursorColor="dodgerblue"
             autoCapitalize="sentences"
+            defaultValue='<html>
+              <check-item checked="false">Sample check item</check-item>
+            </html>'
             onChangeText={handleChangeText}
             onChangeHtml={handleChangeHtml}
             onChangeState={handleChangeState}

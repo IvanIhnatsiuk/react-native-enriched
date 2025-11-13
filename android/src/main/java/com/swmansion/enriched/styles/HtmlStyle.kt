@@ -56,6 +56,9 @@ class HtmlStyle {
   var inlineCodeColor: Int = Color.BLACK
   var inlineCodeBackgroundColor: Int = Color.BLACK
 
+  var checkItemCheckedDrawable = null
+  var checkItemUnCheckedDrawable = null
+
   var mentionsStyle: MutableMap<String, MentionStyle> = mutableMapOf()
 
   constructor(view: EnrichedTextInputView?, style: ReadableMap?) {
@@ -99,6 +102,9 @@ class HtmlStyle {
     ulGapWidth = parseFloat(ulStyle, "gapWidth").toInt()
     ulMarginLeft = parseFloat(ulStyle, "marginLeft").toInt()
     ulBulletSize = parseFloat(ulStyle, "bulletSize").toInt()
+
+    val checkItemStyle = style.getMap("checkItem")
+    checkItemCheckedDrawable = 
 
     val imgStyle = style.getMap("img")
     imgWidth = parseFloat(imgStyle, "width").toInt()

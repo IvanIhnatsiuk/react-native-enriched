@@ -12,6 +12,7 @@ import android.text.style.ParagraphStyle;
 
 import com.swmansion.enriched.spans.EnrichedBlockQuoteSpan;
 import com.swmansion.enriched.spans.EnrichedBoldSpan;
+import com.swmansion.enriched.spans.EnrichedCheckItemSpan;
 import com.swmansion.enriched.spans.EnrichedCodeBlockSpan;
 import com.swmansion.enriched.spans.EnrichedH1Span;
 import com.swmansion.enriched.spans.EnrichedH2Span;
@@ -33,6 +34,7 @@ import com.swmansion.enriched.styles.HtmlStyle;
 
 import org.ccil.cowan.tagsoup.HTMLSchema;
 import org.ccil.cowan.tagsoup.Parser;
+import org.w3c.dom.Attr;
 import org.xml.sax.Attributes;
 import org.xml.sax.ContentHandler;
 import org.xml.sax.InputSource;
@@ -46,6 +48,7 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Most of the code in this file is copied from the Android source code and adjusted to our needs.
@@ -153,6 +156,8 @@ public class EnrichedParser {
         return "h2";
       } else if (span instanceof EnrichedH3Span) {
         return "h3";
+      } else if (span instanceof EnrichedCheckItemSpan) {
+        return "check-item";
       }
     }
 
@@ -443,6 +448,8 @@ class HtmlToSpannedConverter implements ContentHandler {
       startHeading(mSpannableStringBuilder, 3);
     } else if (tag.equalsIgnoreCase("img")) {
       startImg(mSpannableStringBuilder, attributes, mImageGetter, mStyle);
+    } else if(tag.equalsIgnoreCase("check-item")) {
+      startCheckItem(mSpannableStringBuilder, attributes);
     } else if (tag.equalsIgnoreCase("code")) {
       start(mSpannableStringBuilder, new Code());
     } else if (tag.equalsIgnoreCase("mention")) {
@@ -479,6 +486,8 @@ class HtmlToSpannedConverter implements ContentHandler {
       endHeading(mSpannableStringBuilder, mStyle, 2);
     } else if (tag.equalsIgnoreCase("h3")) {
       endHeading(mSpannableStringBuilder, mStyle, 3);
+    } else if (tag.equalsIgnoreCase("check-item")) {
+      endCheckItem(mSpannableStringBuilder, mStyle);
     } else if (tag.equalsIgnoreCase("code")) {
       end(mSpannableStringBuilder, Code.class, new EnrichedInlineCodeSpan(mStyle));
     } else if (tag.equalsIgnoreCase("mention")) {
@@ -716,6 +725,21 @@ class HtmlToSpannedConverter implements ContentHandler {
     setSpanFromMark(text, m, new EnrichedMentionSpan(m.mText, m.mIndicator, m.mAttributes, style));
   }
 
+  private static void startCheckItem(Editable text, Attributes attributes) {
+    String checkedAttribute = attributes.getValue("", "checked");
+    boolean isChecked = checkedAttribute.equals("true");
+
+    start(text, new CheckItem(isChecked));
+  }
+
+  private static void endCheckItem(Editable text, HtmlStyle htmlStyle) {
+    CheckItem checkItem = getLast(text, CheckItem.class);
+
+    if(checkItem == null) return;
+
+    setParagraphSpanFromMark(text, checkItem, new EnrichedCheckItemSpan(htmlStyle, checkItem.mChecked));
+  }
+
   public void setDocumentLocator(Locator locator) {
   }
 
@@ -807,6 +831,14 @@ class HtmlToSpannedConverter implements ContentHandler {
   }
 
   private static class Blockquote {
+  }
+
+  private static class CheckItem {
+    public boolean mChecked;
+
+    public CheckItem(boolean checked) {
+      mChecked = checked;
+    }
   }
 
   private static class List {
