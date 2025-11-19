@@ -175,18 +175,19 @@
   ];
 }
 
-// gets ranges that aren't link, mention or inline code
+// gets ranges that aren't link, mention, colored or inline code
 - (NSArray *)getProperColorRangesIn:(NSRange)range {
   LinkStyle *linkStyle = _input->stylesDict[@([LinkStyle getStyleType])];
   MentionStyle *mentionStyle = _input->stylesDict[@([MentionStyle getStyleType])];
   InlineCodeStyle *codeStyle = _input->stylesDict[@([InlineCodeStyle getStyleType])];
+  ColorStyle *colorStyle = _input->stylesDict[@([ColorStyle getStyleType])];
   
   NSMutableArray *newRanges = [[NSMutableArray alloc] init];
   int lastRangeLocation = range.location;
   
   for(int i = range.location; i < range.location + range.length; i++) {
     NSRange currentRange = NSMakeRange(i, 1);
-    if([linkStyle detectStyle:currentRange] || [mentionStyle detectStyle:currentRange] || [codeStyle detectStyle:currentRange]) {
+    if([linkStyle detectStyle:currentRange] || [mentionStyle detectStyle:currentRange] || [codeStyle detectStyle:currentRange] || [colorStyle detectExcludingColor:[_input->config blockquoteColor] inRange:currentRange]) {
       if(i - lastRangeLocation > 0) {
         [newRanges addObject:[NSValue valueWithRange:NSMakeRange(lastRangeLocation, i - lastRangeLocation)]];
       }

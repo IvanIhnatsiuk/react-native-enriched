@@ -3,6 +3,7 @@
 #import "StyleHeaders.h"
 #import "UIView+React.h"
 #import "TextInsertionUtils.h"
+#import "ColorExtension.h"
 
 @implementation InputParser {
   EnrichedTextInputView *_input;
@@ -30,6 +31,9 @@
   BOOL inBlockQuote = NO;
   unichar lastCharacter = 0;
   
+  // Track current values for valued styles
+  UIColor *previousColor = nil;
+
   for(int i = 0; i < text.length; i++) {
     NSRange currentRange = NSMakeRange(offset + i, 1);
     NSMutableSet<NSNumber *>*currentActiveStyles = [[NSMutableSet<NSNumber *> alloc]init];
@@ -46,6 +50,19 @@
         }
       } else if([previousActiveStyles member:type]) {
         [currentActiveStylesBeginning removeObjectForKey:type];
+      }
+    }
+    
+    // Handle valued styles changes
+    UIColor *currentColor = nil;
+    
+    if([currentActiveStyles containsObject:@(Colored)]) {
+      ColorStyle *colorStyle = _input->stylesDict[@(Colored)];
+      currentColor = [colorStyle getColorAt:currentRange.location];
+      if(previousColor && ![currentColor isEqual:previousColor]) {
+        // Treat as end of previous color and start of new
+        [currentActiveStyles removeObject:@(Colored)];
+        currentActiveStylesBeginning[@(Colored)] = [NSNumber numberWithInt:i];
       }
     }
     
@@ -102,8 +119,9 @@
         }
       }
       
-      // clear the previous styles
+      // clear the previous styles and valued trackers
       previousActiveStyles = [[NSSet<NSNumber *> alloc]init];
+      previousColor = nil;
       
       // next character opens new paragraph
       newLine = YES;
@@ -162,18 +180,15 @@
       NSMutableSet<NSNumber *> *endedStyles = [previousActiveStyles mutableCopy];
       [endedStyles minusSet: currentActiveStyles];
       
-      // also finish styles that should be ended becasue they are nested in a style that ended
+      // also finish styles that should be ended because they are nested in a style that ended
       NSMutableSet *fixedEndedStyles = [endedStyles mutableCopy];
       NSMutableSet *stylesToBeReAdded = [[NSMutableSet alloc] init];
       
-      for(NSNumber *style in endedStyles) {
+      for (NSNumber *style in endedStyles) {
         NSInteger styleBeginning = [currentActiveStylesBeginning[style] integerValue];
         
         for(NSNumber *activeStyle in currentActiveStyles) {
           NSInteger activeStyleBeginning = [currentActiveStylesBeginning[activeStyle] integerValue];
-                  
-          // we end the styles that began after the currently ended style but not at the "i" (cause the old style ended at exactly "i-1"
-          // also the ones that began in the exact same place but are "inner" in relation to them due to StyleTypeEnum integer values
           
           if((activeStyleBeginning > styleBeginning && activeStyleBeginning < i) ||
              (activeStyleBeginning == styleBeginning && activeStyleBeginning < i && [activeStyle integerValue]  > [style integerValue])) {
@@ -209,6 +224,8 @@
       
       // save current styles for next character's checks
       previousActiveStyles = currentActiveStyles;
+      
+      previousColor = currentColor;
     }
     
     // set last character
@@ -221,7 +238,7 @@
     NSArray<NSNumber*> *sortedEndedStyles = [previousActiveStyles sortedArrayUsingDescriptors:@[[NSSortDescriptor sortDescriptorWithKey:@"intValue" ascending:NO]]];
       
     // append closing tags
-    for(NSNumber *style in sortedEndedStyles) {
+    for (NSNumber *style in sortedEndedStyles) {
       NSString *tagContent = [self tagContentForStyle:style openingTag:NO location:_input->textView.textStorage.string.length - 1];
       [result appendString: [NSString stringWithFormat:@"</%@>", tagContent]];
     }
@@ -239,7 +256,7 @@
       [previousActiveStyles containsObject:@([H2Style getStyleType])] ||
       [previousActiveStyles containsObject:@([H3Style getStyleType])]
     ) {
-      // do nothing, heading closing tag has already ben appended
+      // do nothing, heading closing tag has already been appended
     } else {
       [result appendString:@"</p>"];
     }
@@ -276,6 +293,17 @@
     return @"u";
   } else if([style isEqualToNumber: @([StrikethroughStyle getStyleType])]) {
     return @"s";
+  } else if([style isEqualToNumber:@([ColorStyle getStyleType])]) {
+    if(openingTag) {
+      ColorStyle *colorSpan = _input->stylesDict[@([ColorStyle getStyleType])];
+      UIColor *color = [colorSpan getColorAt: location];
+      if(color) {
+        NSString *hex = [color hexString];
+        return [NSString stringWithFormat:@"font color=\"%@\"", hex];
+      };
+    } else {
+      return @"font";
+    }
   } else if([style isEqualToNumber: @([InlineCodeStyle getStyleType])]) {
     return @"code";
   } else if([style isEqualToNumber: @([LinkStyle getStyleType])]) {
@@ -392,6 +420,9 @@
       } else if([styleType isEqualToNumber: @([MentionStyle getStyleType])]) {
         MentionParams *params = (MentionParams *)stylePair.styleValue;
         [((MentionStyle *)baseStyle) addMentionAtRange:styleRange params:params];
+      } else if([styleType isEqualToNumber: @([ColorStyle getStyleType])]) {
+        UIColor *color = (UIColor *)stylePair.styleValue;
+        [((ColorStyle *)baseStyle) applyStyle:styleRange color: color];
       } else {
         [baseStyle addAttributes:styleRange];
       }
@@ -594,6 +625,23 @@
       [styleArr addObject:@([UnderlineStyle getStyleType])];
     } else if([tagName isEqualToString:@"s"]) {
       [styleArr addObject:@([StrikethroughStyle getStyleType])];
+    } else if([tagName isEqualToString:@"font"]) {
+      [styleArr addObject:@([ColorStyle getStyleType])];
+
+      NSString *pattern = @"color=\"([^\"]+)\"";
+      NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:nil];
+      NSTextCheckingResult *match = [regex firstMatchInString:params options:0 range:NSMakeRange(0, params.length)];
+
+      if(match.numberOfRanges == 2) {
+          NSString *colorString = [params substringWithRange:[match rangeAtIndex:1]];
+          
+          UIColor *color = [UIColor colorFromString:colorString];
+          if(color == nil) {
+            continue;
+          }
+          
+          stylePair.styleValue = color;
+      }
     } else if([tagName isEqualToString:@"code"]) {
       [styleArr addObject:@([InlineCodeStyle getStyleType])];
     } else if([tagName isEqualToString:@"a"]) {
