@@ -559,6 +559,8 @@
 
 - (void)setCheckedTextColor:(UIColor *)newValue {
   _checkedTextColor = newValue;
+}
+
 - (void)setDividerColor:(UIColor *)newValue {
   _dividerColor = newValue;
 }
