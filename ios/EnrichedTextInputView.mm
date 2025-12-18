@@ -705,50 +705,12 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 // MARK: - Measuring and states
 
 - (CGSize)measureSize:(CGFloat)maxWidth {
-  // copy the the whole attributed string
-  NSMutableAttributedString *currentStr = [[NSMutableAttributedString alloc]
-      initWithAttributedString:textView.textStorage];
-
-  // edge case: empty input should still be of a height of a single line, so we
-  // add a mock "I" character
-  if ([currentStr length] == 0) {
-    [currentStr
-        appendAttributedString:[[NSAttributedString alloc]
-                                   initWithString:@"I"
-                                       attributes:textView.typingAttributes]];
-  }
-
-  // edge case: input with only a zero width space should still be of a height
-  // of a single line, so we add a mock "I" character
-  if ([currentStr length] == 1 &&
-      [[currentStr.string substringWithRange:NSMakeRange(0, 1)]
-          isEqualToString:@"\u200B"]) {
-    [currentStr
-        appendAttributedString:[[NSAttributedString alloc]
-                                   initWithString:@"I"
-                                       attributes:textView.typingAttributes]];
-  }
-
-  // edge case: trailing newlines aren't counted towards height calculations, so
-  // we add a mock "I" character
-  if (currentStr.length > 0) {
-    unichar lastChar =
-        [currentStr.string characterAtIndex:currentStr.length - 1];
-    if ([[NSCharacterSet newlineCharacterSet] characterIsMember:lastChar]) {
-      [currentStr
-          appendAttributedString:[[NSAttributedString alloc]
-                                     initWithString:@"I"
-                                         attributes:defaultTypingAttributes]];
-    }
-  }
-
-  CGRect boundingBox =
-      [currentStr boundingRectWithSize:CGSizeMake(maxWidth, CGFLOAT_MAX)
-                               options:NSStringDrawingUsesLineFragmentOrigin |
-                                       NSStringDrawingUsesFontLeading
-                               context:nullptr];
-
-  return CGSizeMake(maxWidth, ceil(boundingBox.size.height));
+  NSTextContainer *container = textView.textContainer;
+  NSLayoutManager *layoutManager = textView.layoutManager;
+  container.size = CGSizeMake(maxWidth, CGFLOAT_MAX);
+  [layoutManager ensureLayoutForTextContainer:container];
+  CGRect usedRect = [layoutManager usedRectForTextContainer:container];
+  return CGSizeMake(maxWidth, ceil(usedRect.size.height));
 }
 
 // make sure the newest state is kept in _state property
@@ -1402,8 +1364,6 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   [self tryUpdatingHeight];
   // update active styles as well
   [self tryUpdatingActiveStyles];
-  // update drawing - schedule debounced relayout
-  [self scheduleRelayoutIfNeeded];
 }
 
 // Debounced relayout helper - coalesces multiple requests into one per runloop
@@ -1447,7 +1407,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 - (void)didMoveToWindow {
   [super didMoveToWindow];
   // used to run all lifecycle callbacks
-  [self anyTextMayHaveBeenModified];
+  [self layoutIfNeeded];
 }
 
 // MARK: - UITextView delegate methods
