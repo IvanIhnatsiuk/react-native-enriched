@@ -1366,44 +1366,6 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   [self tryUpdatingActiveStyles];
 }
 
-// Debounced relayout helper - coalesces multiple requests into one per runloop
-// tick
-- (void)scheduleRelayoutIfNeeded {
-  // Cancel any previously scheduled invocation to debounce
-  [NSObject cancelPreviousPerformRequestsWithTarget:self
-                                           selector:@selector(_performRelayout)
-                                             object:nil];
-  // Schedule on next runloop cycle
-  [self performSelector:@selector(_performRelayout)
-             withObject:nil
-             afterDelay:0];
-}
-
-- (void)_performRelayout {
-  if (!textView) {
-    return;
-  }
-
-  dispatch_async(dispatch_get_main_queue(), ^{
-    NSRange wholeRange =
-        NSMakeRange(0, self->textView.textStorage.string.length);
-    NSRange actualRange = NSMakeRange(0, 0);
-    [self->textView.layoutManager
-        invalidateLayoutForCharacterRange:wholeRange
-                     actualCharacterRange:&actualRange];
-    [self->textView.layoutManager ensureLayoutForCharacterRange:actualRange];
-    [self->textView.layoutManager
-        invalidateDisplayForCharacterRange:wholeRange];
-
-    // We have to explicitly set contentSize
-    // That way textView knows if content overflows and if should be scrollable
-    // We recall measureSize here because value returned from previous
-    // measureSize may not be up-to date at that point
-    CGSize measuredSize = [self measureSize:self->textView.frame.size.width];
-    self->textView.contentSize = measuredSize;
-  });
-}
-
 - (void)didMoveToWindow {
   [super didMoveToWindow];
   // used to run all lifecycle callbacks
