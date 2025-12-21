@@ -63,8 +63,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
     _props = defaultProps;
     [self setDefaults];
     [self setupTextView];
-    [self setupPlaceholderLabel];
-    self.contentView = textView;
+    [self addSubview:textView];
   }
   return self;
 }
@@ -198,24 +197,8 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   textView.delegate = self;
   textView.input = self;
   textView.layoutManager.input = self;
-}
-
-- (void)setupPlaceholderLabel {
-  _placeholderLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-  _placeholderLabel.translatesAutoresizingMaskIntoConstraints = NO;
-  [textView addSubview:_placeholderLabel];
-  [NSLayoutConstraint activateConstraints:@[
-    [_placeholderLabel.leadingAnchor
-        constraintEqualToAnchor:textView.leadingAnchor],
-    [_placeholderLabel.widthAnchor
-        constraintEqualToAnchor:textView.widthAnchor],
-    [_placeholderLabel.topAnchor constraintEqualToAnchor:textView.topAnchor],
-    [_placeholderLabel.bottomAnchor
-        constraintEqualToAnchor:textView.bottomAnchor]
-  ]];
-  _placeholderLabel.lineBreakMode = NSLineBreakByTruncatingTail;
-  _placeholderLabel.text = @"";
-  _placeholderLabel.hidden = YES;
+  textView.autoresizingMask =
+      UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 }
 
 // MARK: - Props
@@ -569,9 +552,6 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
         [[NSParagraphStyle alloc] init];
     textView.typingAttributes = defaultTypingAttributes;
     textView.selectedRange = prevSelectedRange;
-
-    // update the placeholder as well
-    [self refreshPlaceholderLabelStyles];
   }
 
   // editable
@@ -599,24 +579,14 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
 
   // placeholderTextColor
   if (newViewProps.placeholderTextColor != oldViewProps.placeholderTextColor) {
-    // some real color
-    if (isColorMeaningful(newViewProps.placeholderTextColor)) {
-      _placeholderColor =
-          RCTUIColorFromSharedColor(newViewProps.placeholderTextColor);
-    } else {
-      _placeholderColor = nullptr;
-    }
-    [self refreshPlaceholderLabelStyles];
+    textView.placeholderColor =
+        RCTUIColorFromSharedColor(newViewProps.placeholderTextColor);
   }
 
   // placeholder
   if (newViewProps.placeholder != oldViewProps.placeholder) {
-    _placeholderLabel.text = [NSString fromCppString:newViewProps.placeholder];
-    [self refreshPlaceholderLabelStyles];
-    // additionally show placeholder on first mount if it should be there
-    if (isFirstMount && textView.text.length == 0) {
-      [self setPlaceholderLabelShown:YES];
-    }
+    [textView
+        setPlaceholderText:[NSString fromCppString:newViewProps.placeholder]];
   }
 
   // mention indicators
@@ -680,39 +650,17 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   if (isFirstMount && newViewProps.autoFocus) {
     [textView reactFocus];
   }
+  [textView updatePlaceholderVisibility];
 }
 
-- (void)setPlaceholderLabelShown:(BOOL)shown {
-  if (shown) {
-    [self refreshPlaceholderLabelStyles];
-    _placeholderLabel.hidden = NO;
-  } else {
-    _placeholderLabel.hidden = YES;
-  }
-}
+- (void)updateLayoutMetrics:(const LayoutMetrics &)layoutMetrics
+           oldLayoutMetrics:(const LayoutMetrics &)oldLayoutMetrics {
+  [super updateLayoutMetrics:layoutMetrics oldLayoutMetrics:oldLayoutMetrics];
 
-- (void)refreshPlaceholderLabelStyles {
-  NSMutableDictionary *newAttrs = [defaultTypingAttributes mutableCopy];
-  if (_placeholderColor != nullptr) {
-    newAttrs[NSForegroundColorAttributeName] = _placeholderColor;
-  }
-  NSAttributedString *newAttrStr =
-      [[NSAttributedString alloc] initWithString:_placeholderLabel.text
-                                      attributes:newAttrs];
-  _placeholderLabel.attributedText = newAttrStr;
-}
-
-// MARK: - Measuring and states
-
-- (CGSize)measureSize:(CGFloat)maxWidth {
-  NSTextContainer *container = textView.textContainer;
-  NSLayoutManager *layoutManager = textView.layoutManager;
-  container.size = CGSizeMake(maxWidth, CGFLOAT_MAX);
-  [layoutManager ensureLayoutForTextContainer:container];
-  CGRect usedRect = [layoutManager usedRectForTextContainer:container];
-  CGSize contentSize = CGSizeMake(maxWidth, ceil(usedRect.size.height));
-  textView.contentSize = contentSize;
-  return contentSize;
+  textView.frame = UIEdgeInsetsInsetRect(
+      self.bounds, RCTUIEdgeInsetsFromEdgeInsets(layoutMetrics.borderWidth));
+  textView.textContainerInset = RCTUIEdgeInsetsFromEdgeInsets(
+      layoutMetrics.contentInsets - layoutMetrics.borderWidth);
 }
 
 // make sure the newest state is kept in _state property
@@ -725,18 +673,22 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   // componentView) so we need to run a single height calculation for any
   // initial values
   if (oldState == nullptr) {
-    [self tryUpdatingHeight];
+    [self commitState];
   }
 }
 
-- (void)tryUpdatingHeight {
+- (void)commitState {
   if (_state == nullptr) {
     return;
   }
-  _componentViewHeightUpdateCounter++;
-  auto selfRef = wrapManagedObjectWeakly(self);
-  _state->updateState(
-      EnrichedTextInputViewState(_componentViewHeightUpdateCounter, selfRef));
+  NSAttributedString *currentAttributedText = [textView.attributedText copy];
+  NSAttributedString *snapshot =
+      currentAttributedText && currentAttributedText.length > 0
+          ? currentAttributedText
+          : [[NSAttributedString alloc]
+                initWithString:@"I"
+                    attributes:textView.typingAttributes];
+  _state->updateState(EnrichedTextInputViewState(snapshot));
 }
 
 // MARK: - Active styles
@@ -1321,12 +1273,7 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   }
 
   // placholder management
-  if (!_placeholderLabel.hidden && textView.textStorage.string.length > 0) {
-    [self setPlaceholderLabelShown:NO];
-  } else if (textView.textStorage.string.length == 0 &&
-             _placeholderLabel.hidden) {
-    [self setPlaceholderLabelShown:YES];
-  }
+  [textView updatePlaceholderVisibility];
 
   if (![textView.textStorage.string isEqualToString:_recentInputString]) {
     // modified words handling
@@ -1363,17 +1310,9 @@ Class<RCTComponentViewProtocol> EnrichedTextInputViewCls(void) {
   }
 
   // update height on each character change
-  [self tryUpdatingHeight];
+  [self commitState];
   // update active styles as well
   [self tryUpdatingActiveStyles];
-}
-
-- (void)didMoveToWindow {
-  [super didMoveToWindow];
-  if (self.window != nil) {
-    // used to run all lifecycle callbacks
-    [self anyTextMayHaveBeenModified];
-  }
 }
 
 // MARK: - UITextView delegate methods
